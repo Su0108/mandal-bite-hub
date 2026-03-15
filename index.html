@@ -8,11 +8,6 @@
 <link rel="preconnect" href="https://fonts.googleapis.com"/>
 <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,600;0,700;1,400;1,600&family=Outfit:wght@300;400;500;600;700&display=swap" rel="stylesheet"/>
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css"/>
-<!-- Firebase SDK - loaded early -->
-<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-messaging-compat.js"></script>
 <style>
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
 :root{
@@ -1583,15 +1578,10 @@ function doAdminLogin(){
   const pw=(el('al-pw')?.value||'').trim();
   const err=el('al-err');
   if(!email||!pw){if(err)err.innerHTML='<div class="errbox">⚠️ Enter email and password.</div>';return;}
-  // Instant local check
   if(email===R.email && pw===S.adminPass){
     S.adminIn=true;S.adminEmail=email;
     toast('Welcome back, Admin! 👋','ok');
     S.page='admin';render();
-    // Firebase background login
-    if(typeof firebase!=='undefined' && typeof auth!=='undefined'){
-      auth.signInWithEmailAndPassword(email,pw).catch(()=>{});
-    }
     return;
   }
   if(err)err.innerHTML='<div class="errbox">❌ Invalid email or password.</div>';
@@ -1600,13 +1590,7 @@ function doForgotPassword(){
   const email=(el('al-id')?.value||'').trim();
   const msg=el('al-forgot-msg');
   if(!email||!email.includes('@')){if(msg)msg.innerHTML='<div class="errbox">⚠️ Email দাও আগে।</div>';return;}
-  if(typeof firebase!=='undefined' && typeof auth!=='undefined'){
-    auth.sendPasswordResetEmail(email)
-      .then(()=>{if(msg)msg.innerHTML=`<div class="sucbox">📧 Reset link sent to <strong>${email}</strong>. Inbox check করো!</div>`;})
-      .catch(e=>{if(msg)msg.innerHTML=`<div class="errbox">❌ ${e.code==='auth/user-not-found'?'Email টা Firebase এ নেই।':e.message}</div>`;});
-  } else {
-    if(msg)msg.innerHTML='<div class="errbox">❌ Internet নেই।</div>';
-  }
+  if(msg)msg.innerHTML=`<div class="sucbox">📧 Password reset এর জন্য <strong>subhadip12mandal@gmail.com</strong> তে contact করো।</div>`;
 }
 function pageAdmin(){
   if(!S.adminIn)return pageAdminLogin();
@@ -2196,121 +2180,170 @@ function render(){
 render();
 </script>
 
-<!-- Firebase config and integration -->
+<!-- Supabase SDK -->
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script>
-const firebaseConfig = {
-  apiKey: "AIzaSyBbqXzk3zfafIsKk3Pfh7maBLPJGlsCPos",
-  authDomain: "mandal-bite-hub-83a2a.firebaseapp.com",
-  projectId: "mandal-bite-hub-83a2a",
-  storageBucket: "mandal-bite-hub-83a2a.firebasestorage.app",
-  messagingSenderId: "997210036398",
-  appId: "1:997210036398:web:d818ff9dfd078b7937f53f"
-};
+const SUPABASE_URL = 'https://xvwpgvoaivwpqaccmavy.supabase.co';
+const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inh2d3Bndm9haXZ3cHFhY2NtYXZ5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzM1OTY4NjgsImV4cCI6MjA4OTE3Mjg2OH0.5wIvnAsyPH1ndnMt6urDlDdmwkwOkf66ylrNB9-y7QY';
+const sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
-// Safety check — wait for firebase to load
-let auth, db;
-if (typeof firebase === 'undefined') {
-  console.error('Firebase not loaded!');
-} else {
-firebase.initializeApp(firebaseConfig);
-auth = firebase.auth();
-db = firebase.firestore();
-
-// ─── AUTH STATE ───────────────────────────────────────────────────────────────
-auth.onAuthStateChanged(async (user) => {
-  if (user) {
-    if (S.adminIn) return; // already logged in, skip
+// ─── AUTH ─────────────────────────────────────────────────────────────────────
+// Check session on load
+sb.auth.getSession().then(({ data: { session } }) => {
+  if (session) {
     S.adminIn = true;
-    S.adminEmail = user.email;
-    try { await loadAllData(); } catch(e) { console.log('loadAllData error:', e); }
-    if (S.page === 'admin-login' || S.page === 'home') {
-      S.page = 'admin';
-      render();
-    }
-  } else {
-    S.adminIn = false;
-    S.adminEmail = '';
-    if (S.page === 'admin') { S.page = 'home'; render(); }
+    S.adminEmail = session.user.email;
+    loadAllData().then(() => { S.page = 'admin'; render(); });
   }
 });
 
-// ─── LOAD ALL DATA ────────────────────────────────────────────────────────────
-async function loadAllData() {
-  // Menu
-  const menuSnap = await db.collection('menu').get();
-  if (!menuSnap.empty) {
-    S.menu = menuSnap.docs.map(d => ({ ...d.data(), id: d.id }));
-  } else {
-    for (const item of S.menu) {
-      await db.collection('menu').doc(String(item.id)).set(item);
-    }
+// Auth state change
+sb.auth.onAuthStateChange((event, session) => {
+  if (event === 'SIGNED_IN' && session) {
+    S.adminIn = true;
+    S.adminEmail = session.user.email;
+  } else if (event === 'SIGNED_OUT') {
+    S.adminIn = false;
+    S.adminEmail = '';
   }
-  // Orders real-time
-  db.collection('orders').orderBy('placedAt','desc').onSnapshot(snap => {
-    S.orders = snap.docs.map(d => ({ ...d.data(), id: d.id }));
-    renderNavBadge(); renderBNav();
-    if (S.adminIn && (S.adminTab==='orders'||S.adminTab==='dashboard')) render();
-    if (S.page==='status') render();
-  });
-  // Reservations real-time
-  db.collection('reservations').orderBy('createdAt','desc').onSnapshot(snap => {
-    S.reservations = snap.docs.map(d => ({ ...d.data(), id: d.id }));
-    if (S.adminIn && S.adminTab==='reservations') render();
-  });
-  // Coupons
-  const cpSnap = await db.collection('coupons').get();
-  if (!cpSnap.empty) {
-    S.coupons = cpSnap.docs.map(d => ({ ...d.data(), code: d.id }));
-  } else {
-    for (const cp of S.coupons) {
-      await db.collection('coupons').doc(cp.code).set(cp);
-    }
-  }
-  // Offers
-  const ofSnap = await db.collection('offers').get();
-  if (!ofSnap.empty) S.offers = ofSnap.docs.map(d => ({ ...d.data(), id: d.id }));
-  else {
-    for (const o of S.offers) await db.collection('offers').doc(String(o.id)).set(o);
-  }
-  // Settings
-  const stSnap = await db.collection('settings').doc('main').get();
-  if (stSnap.exists) {
-    const st = stSnap.data();
-    if (st.special) S.special = st.special;
-    if (st.announcement) S.announcement = st.announcement;
-    if (st.wifi) S.wifi = st.wifi;
-  }
-}
+});
 
-// ─── FIRESTORE SAVES ──────────────────────────────────────────────────────────
-window.doAdminLogout = async function() {
-  if(typeof auth!=='undefined') try{await auth.signOut();}catch(e){}
-  S.adminIn=false; S.page='home'; render();
+// Override login
+window.doAdminLogin = async function() {
+  const email = (el('al-id')?.value||'').trim();
+  const pw = (el('al-pw')?.value||'').trim();
+  const err = el('al-err');
+  if (!email||!pw) { if(err) err.innerHTML='<div class="errbox">⚠️ Email ও Password দাও।</div>'; return; }
+
+  // Instant local check
+  if (email === R.email && pw === S.adminPass) {
+    S.adminIn = true; S.adminEmail = email;
+    toast('Welcome back, Admin! 👋', 'ok');
+    await loadAllData();
+    S.page = 'admin'; render();
+    // Supabase login background
+    sb.auth.signInWithPassword({ email, password: pw }).catch(() => {});
+    return;
+  }
+  // Supabase login
+  if(err) err.innerHTML='<div style="color:var(--mu);font-size:.85rem;text-align:center;padding:8px">⏳ Signing in...</div>';
+  const { error } = await sb.auth.signInWithPassword({ email, password: pw });
+  if (error) {
+    if(err) err.innerHTML = `<div class="errbox">❌ Invalid email or password.</div>`;
+  } else {
+    S.adminIn = true; S.adminEmail = email;
+    toast('Welcome back, Admin! 👋', 'ok');
+    await loadAllData();
+    S.page = 'admin'; render();
+  }
 };
 
+// Forgot password
+window.doForgotPassword = async function() {
+  const email = (el('al-id')?.value||'').trim();
+  const msg = el('al-forgot-msg');
+  if (!email||!email.includes('@')) { if(msg) msg.innerHTML='<div class="errbox">⚠️ Email দাও আগে।</div>'; return; }
+  if(msg) msg.innerHTML='<div style="color:var(--mu);font-size:.85rem;text-align:center;padding:8px">⏳ Sending...</div>';
+  const { error } = await sb.auth.resetPasswordForEmail(email, {
+    redirectTo: window.location.origin
+  });
+  if (error) {
+    if(msg) msg.innerHTML=`<div class="errbox">❌ ${error.message}</div>`;
+  } else {
+    if(msg) msg.innerHTML=`<div class="sucbox">📧 Reset link sent to <strong>${email}</strong>. Inbox check করো!</div>`;
+  }
+};
+
+// Logout
+window.doAdminLogout = async function() {
+  await sb.auth.signOut();
+  S.adminIn = false; S.page = 'home'; render();
+};
+
+// ─── LOAD ALL DATA ────────────────────────────────────────────────────────────
+async function loadAllData() {
+  try {
+    // Menu
+    const { data: menuData } = await sb.from('menu').select('*');
+    if (menuData && menuData.length > 0) {
+      S.menu = menuData.map(m => ({ ...m, soldOut: m.sold_out, desc: m.description }));
+    } else {
+      // Upload default menu
+      const rows = S.menu.map(m => ({ id: String(m.id), name: m.name, cat: m.cat, price: m.price, veg: m.veg, badge: m.badge||'', sold_out: m.soldOut||false, description: m.desc||'', img: m.img||'' }));
+      await sb.from('menu').insert(rows);
+    }
+    // Orders
+    const { data: ordersData } = await sb.from('orders').select('*').order('placed_at', { ascending: false });
+    if (ordersData) S.orders = ordersData.map(o => ({ ...o, placedAt: o.placed_at }));
+    // Reservations
+    const { data: resData } = await sb.from('reservations').select('*').order('created_at', { ascending: false });
+    if (resData) S.reservations = resData;
+    // Coupons
+    const { data: cpData } = await sb.from('coupons').select('*');
+    if (cpData && cpData.length > 0) {
+      S.coupons = cpData.map(c => ({ ...c, desc: c.description }));
+    } else {
+      const rows = S.coupons.map(c => ({ code: c.code, disc: c.disc, type: c.type, description: c.desc, active: c.active }));
+      await sb.from('coupons').insert(rows);
+    }
+    // Offers
+    const { data: ofData } = await sb.from('offers').select('*');
+    if (ofData && ofData.length > 0) {
+      S.offers = ofData.map(o => ({ ...o, desc: o.description }));
+    } else {
+      const rows = S.offers.map(o => ({ id: String(o.id), title: o.title, badge: o.badge, description: o.desc, img: o.img||'' }));
+      await sb.from('offers').insert(rows);
+    }
+    // Settings
+    const { data: stData } = await sb.from('settings').select('*').eq('id','main').single();
+    if (stData) {
+      if (stData.special) S.special = stData.special;
+      if (stData.announcement) S.announcement = stData.announcement;
+      if (stData.wifi) S.wifi = stData.wifi;
+    }
+    // Realtime orders
+    sb.channel('orders').on('postgres_changes', { event: '*', schema: 'public', table: 'orders' }, payload => {
+      loadOrders();
+    }).subscribe();
+    // Realtime reservations
+    sb.channel('reservations').on('postgres_changes', { event: '*', schema: 'public', table: 'reservations' }, payload => {
+      loadReservations();
+    }).subscribe();
+  } catch(e) { console.error('Load error:', e); }
+}
+
+async function loadOrders() {
+  const { data } = await sb.from('orders').select('*').order('placed_at', { ascending: false });
+  if (data) { S.orders = data.map(o => ({ ...o, placedAt: o.placed_at })); renderNavBadge(); renderBNav(); if(S.page==='status'||( S.adminIn&&(S.adminTab==='orders'||S.adminTab==='dashboard')))render(); }
+}
+async function loadReservations() {
+  const { data } = await sb.from('reservations').select('*').order('created_at', { ascending: false });
+  if (data) { S.reservations = data; if(S.adminIn&&S.adminTab==='reservations')render(); }
+}
+
+// ─── SAVE FUNCTIONS ───────────────────────────────────────────────────────────
 window.saveMenuItem = async function() {
   const name=(el('fi-name')?.value||'').trim();
   const price=Number(el('fi-price')?.value||0);
   if(!name||!price){toast('Name and price required','err');return;}
   const editId=el('fi-editid')?.value||'';
   const docId=editId||String(Date.now());
-  const item={id:docId,name,cat:el('fi-cat')?.value||'Starter',price,veg:el('fi-veg')?.value==='true',badge:el('fi-badge')?.value||'',soldOut:el('fi-sold')?.value==='true',desc:(el('fi-desc')?.value||'').trim(),img:(el('fi-img')?.value||'').trim()};
-  try {
-    await db.collection('menu').doc(docId).set(item);
-    const idx=S.menu.findIndex(m=>String(m.id)===docId);
-    if(idx>=0)S.menu[idx]=item;else S.menu.push(item);
-    toast(editId?'Item updated ✅':'Item added ✅','ok');
-    cancelMenuForm();render();
-  } catch(e){toast('Save failed: '+e.message,'err');}
+  const item={ id:docId, name, cat:el('fi-cat')?.value||'Starter', price, veg:el('fi-veg')?.value==='true', badge:el('fi-badge')?.value||'', sold_out:el('fi-sold')?.value==='true', description:(el('fi-desc')?.value||'').trim(), img:(el('fi-img')?.value||'').trim() };
+  const { error } = await sb.from('menu').upsert(item);
+  if (error) { toast('Save failed: '+error.message,'err'); return; }
+  const sItem = { ...item, soldOut: item.sold_out, desc: item.description };
+  const idx=S.menu.findIndex(m=>String(m.id)===docId);
+  if(idx>=0)S.menu[idx]=sItem; else S.menu.push(sItem);
+  toast(editId?'Item updated ✅':'Item added ✅','ok');
+  cancelMenuForm(); render();
 };
 
 window.delMenuItem = async function(id) {
   if(!confirm('Delete this item?'))return;
-  try {
-    await db.collection('menu').doc(String(id)).delete();
-    S.menu=S.menu.filter(m=>String(m.id)!==String(id));
-    toast('Item deleted','err');render();
-  } catch(e){toast('Delete failed','err');}
+  const { error } = await sb.from('menu').delete().eq('id', String(id));
+  if (error) { toast('Delete failed','err'); return; }
+  S.menu=S.menu.filter(m=>String(m.id)!==String(id));
+  toast('Item deleted','err'); render();
 };
 
 window.saveCoupon = async function() {
@@ -2323,33 +2356,29 @@ window.saveCoupon = async function() {
   if(!code){toast('Coupon code required','err');return;}
   if(!disc||disc<=0){toast('Discount value required','err');return;}
   if(!desc){toast('Description required','err');return;}
+  const { error } = await sb.from('coupons').upsert({ code, disc, type, description: desc, active });
+  if (error) { toast('Save failed: '+error.message,'err'); return; }
   const cpData={code,disc,type,desc,active};
-  try {
-    await db.collection('coupons').doc(code).set(cpData);
-    if(!editCode){S.coupons.push(cpData);toast('Coupon added ✅','ok');}
-    else{const idx=S.coupons.findIndex(c=>c.code===editCode);if(idx>=0)S.coupons[idx]=cpData;toast('Coupon updated ✅','ok');}
-    hideCouponForm();render();
-  } catch(e){toast('Save failed: '+e.message,'err');}
+  if(!editCode){ S.coupons.push(cpData); toast('Coupon added ✅','ok'); }
+  else { const idx=S.coupons.findIndex(c=>c.code===editCode); if(idx>=0)S.coupons[idx]=cpData; toast('Coupon updated ✅','ok'); }
+  hideCouponForm(); render();
 };
 
 window.delCoupon = async function(code) {
   if(!confirm('Delete coupon '+code+'?'))return;
-  try {
-    await db.collection('coupons').doc(code).delete();
-    S.coupons=S.coupons.filter(c=>c.code!==code);
-    if(S.couponApplied===code)S.couponApplied=null;
-    toast('Coupon deleted','err');render();
-  } catch(e){toast('Delete failed','err');}
+  const { error } = await sb.from('coupons').delete().eq('code', code);
+  if (error) { toast('Delete failed','err'); return; }
+  S.coupons=S.coupons.filter(c=>c.code!==code);
+  if(S.couponApplied===code)S.couponApplied=null;
+  toast('Coupon deleted','err'); render();
 };
 
 window.toggleCoupon = async function(code) {
-  const cp=S.coupons.find(c=>c.code===code);if(!cp)return;
+  const cp=S.coupons.find(c=>c.code===code); if(!cp)return;
   cp.active=!cp.active;
-  try {
-    await db.collection('coupons').doc(code).update({active:cp.active});
-    if(!cp.active&&S.couponApplied===code)S.couponApplied=null;
-    toast(code+' '+(cp.active?'activated ✅':'deactivated'),'ok');render();
-  } catch(e){toast('Update failed','err');}
+  await sb.from('coupons').update({active:cp.active}).eq('code',code);
+  if(!cp.active&&S.couponApplied===code)S.couponApplied=null;
+  toast(code+' '+(cp.active?'activated ✅':'deactivated'),'ok'); render();
 };
 
 window.submitOrder = async function() {
@@ -2361,167 +2390,103 @@ window.submitOrder = async function() {
   if(!/^\d{10}$/.test(phone)){toast('Enter valid 10-digit phone','err');return;}
   let disc=0;
   if(S.couponApplied){const cp=getCouponMap()[S.couponApplied];const sub=cartSub();disc=cp.type==='percent'?Math.round(sub*cp.disc/100):Math.min(cp.disc,sub);}
-  const sub=cartSub();const discSub=sub-disc;
+  const sub=cartSub(); const discSub=sub-disc;
   const oid='ORD'+Date.now().toString().slice(-6);
   const now=Date.now();
-  const ord={id:oid,items:[...S.cart],total:discSub,subtotal:sub,discount:disc,coupon:S.couponApplied||'',customer:{name,phone,type:otype,notes},status:'Pending',at:new Date(now).toLocaleString('en-IN'),placedAt:now};
-  try { await db.collection('orders').doc(oid).set(ord); } catch(e){}
-  S.orders.unshift(ord);S.pendOrd=ord;S.curOid=oid;
-  S.cart=[];S.couponApplied=null;S.couponCode='';
-  renderNavBadge();go('payment');
-  if(Notification.permission==='default'){
-    setTimeout(()=>{if(confirm('🔔 Enable notifications to track your order?'))requestNotifPermission();},1500);
-  }
+  const ord={ id:oid, items:S.cart, total:discSub, subtotal:sub, discount:disc, coupon:S.couponApplied||'', customer:{name,phone,type:otype,notes}, status:'Pending', placed_at:now, at:new Date(now).toLocaleString('en-IN') };
+  await sb.from('orders').insert(ord);
+  S.orders.unshift({...ord, placedAt:now});
+  S.pendOrd={...ord,placedAt:now}; S.curOid=oid;
+  S.cart=[]; S.couponApplied=null; S.couponCode='';
+  renderNavBadge(); go('payment');
 };
 
-window.updOrderStatus = async function(id,st) {
-  const o=S.orders.find(x=>x.id===id);if(o){o.status=st;}
-  try { await db.collection('orders').doc(id).update({status:st}); } catch(e){}
-  toast('Order '+id+' → '+st,'ok');render();
+window.updOrderStatus = async function(id, st) {
+  await sb.from('orders').update({status:st}).eq('id',id);
+  const o=S.orders.find(x=>x.id===id); if(o) o.status=st;
+  toast('Order '+id+' → '+st,'ok'); render();
 };
 
 window.markPaymentReceived = async function(id) {
-  const o=S.orders.find(x=>x.id===id);if(!o)return;
-  o.status='Completed';
-  try { await db.collection('orders').doc(id).update({status:'Completed'}); } catch(e){}
-  toast('Payment received 💰','ok');render();
+  await sb.from('orders').update({status:'Completed'}).eq('id',id);
+  const o=S.orders.find(x=>x.id===id); if(o) o.status='Completed';
+  toast('Payment received 💰','ok'); render();
 };
 
 window.submitRes = async function() {
-  const name=(el('rname')?.value||'').trim();const phone=(el('rphone')?.value||'').trim();
-  const date=el('rdate')?.value||'';const time=el('rtime')?.value||'';
-  const guests=el('rguests')?.value||'2';const notes=(el('rnotes')?.value||'').trim();
+  const name=(el('rname')?.value||'').trim();
+  const phone=(el('rphone')?.value||'').trim();
+  const date=el('rdate')?.value||''; const time=el('rtime')?.value||'';
+  const guests=el('rguests')?.value||'2'; const notes=(el('rnotes')?.value||'').trim();
   if(!name){toast('Please enter your name','err');return;}
   if(!/^\d{10}$/.test(phone)){toast('Enter valid 10-digit phone','err');return;}
   if(!date){toast('Please select a date','err');return;}
   if(!time){toast('Please select a time','err');return;}
   const rid='RES'+Date.now().toString().slice(-5);
-  const rec={id:rid,name,phone,date,time,guests,notes,status:'Received',createdAt:new Date().toLocaleString('en-IN')};
-  try { await db.collection('reservations').doc(rid).set(rec); } catch(e){}
-  S.reservations.unshift(rec);toast('Reservation submitted! 📅','ok');
+  const rec={ id:rid, name, phone, date, time, guests, notes, status:'Received', created_at:new Date().toLocaleString('en-IN') };
+  await sb.from('reservations').insert(rec);
+  S.reservations.unshift(rec); toast('Reservation submitted! 📅','ok');
   const b=el('res-success');
   if(b)b.innerHTML=`<div class="sucbox">✅ Reservation Received!<br/><span style="font-weight:400;font-size:.88rem">Thank you, <strong>${name}</strong>! Table for <strong>${guests}</strong> on <strong>${date}</strong> at <strong>${time}</strong>.</span></div>`;
 };
 
-window.updResStatus = async function(id,st) {
-  const r=S.reservations.find(x=>x.id===id);if(r){r.status=st;}
-  try { await db.collection('reservations').doc(id).update({status:st}); } catch(e){}
-  toast('Reservation '+st.toLowerCase(),'ok');render();
+window.updResStatus = async function(id, st) {
+  await sb.from('reservations').update({status:st}).eq('id',id);
+  const r=S.reservations.find(x=>x.id===id); if(r) r.status=st;
+  toast('Reservation '+st.toLowerCase(),'ok'); render();
 };
 
 window.saveSpecial = async function() {
   S.special={enabled:el('sp-en')?.value==='true',name:el('sp-name')?.value||'',price:Number(el('sp-price')?.value)||0,desc:el('sp-desc')?.value||'',img:el('sp-img')?.value||''};
-  try { await db.collection('settings').doc('main').set({special:S.special},{merge:true}); } catch(e){}
-  toast("Today's Special updated ✅",'ok');render();
+  await sb.from('settings').upsert({id:'main',special:S.special});
+  toast("Today's Special updated ✅",'ok'); render();
 };
 
 window.saveAnn = async function() {
   S.announcement={text:el('ann-inp')?.value||'',show:el('ann-show')?.value==='true'};
-  try { await db.collection('settings').doc('main').set({announcement:S.announcement},{merge:true}); } catch(e){}
-  toast('Announcement updated ✅','ok');showAnn();render();
+  await sb.from('settings').upsert({id:'main',announcement:S.announcement});
+  toast('Announcement updated ✅','ok'); showAnn(); render();
 };
 
 window.saveWifi = async function() {
-  const ssid=(el('w-ssid')?.value||'').trim();const pw=(el('w-pw')?.value||'').trim();
+  const ssid=(el('w-ssid')?.value||'').trim(); const pw=(el('w-pw')?.value||'').trim();
   if(!ssid||!pw){toast('Both fields required','err');return;}
   S.wifi={ssid,password:pw};
-  try { await db.collection('settings').doc('main').set({wifi:S.wifi},{merge:true}); } catch(e){}
+  await sb.from('settings').upsert({id:'main',wifi:S.wifi});
   toast('WiFi updated ✅','ok');
 };
 
 window.saveOffer = async function() {
-  const title=(el('of-title')?.value||'').trim();const badge=(el('of-badge')?.value||'').trim();const desc=(el('of-desc')?.value||'').trim();
+  const title=(el('of-title')?.value||'').trim(); const badge=(el('of-badge')?.value||'').trim(); const desc=(el('of-desc')?.value||'').trim();
   if(!title||!badge||!desc){toast('Title, badge and description required','err');return;}
   const editId=Number(el('of-editid')?.value)||0;
-  const item={id:editId||Date.now(),title,badge,desc,img:(el('of-img')?.value||'').trim()};
-  try {
-    await db.collection('offers').doc(String(item.id)).set(item);
-    const idx=S.offers.findIndex(x=>x.id===item.id);
-    if(idx>=0){S.offers[idx]=item;toast('Offer updated ✅','ok');}else{S.offers.push(item);toast('Offer added ✅','ok');}
-    hideOfferForm();render();
-  } catch(e){toast('Save failed','err');}
+  const item={id:String(editId||Date.now()),title,badge,description:desc,img:(el('of-img')?.value||'').trim()};
+  await sb.from('offers').upsert(item);
+  const sItem={...item,desc:item.description,id:Number(item.id)||Date.now()};
+  const idx=S.offers.findIndex(x=>String(x.id)===item.id);
+  if(idx>=0){S.offers[idx]=sItem;toast('Offer updated ✅','ok');}else{S.offers.push(sItem);toast('Offer added ✅','ok');}
+  hideOfferForm(); render();
 };
 
 window.delOffer = async function(id) {
   if(!confirm('Delete this offer?'))return;
-  try {
-    await db.collection('offers').doc(String(id)).delete();
-    S.offers=S.offers.filter(x=>x.id!==id);
-    toast('Offer deleted','err');render();
-  } catch(e){toast('Delete failed','err');}
+  await sb.from('offers').delete().eq('id',String(id));
+  S.offers=S.offers.filter(x=>x.id!==id);
+  toast('Offer deleted','err'); render();
 };
 
-// ─── PUSH NOTIFICATIONS ───────────────────────────────────────────────────────
-const VAPID_KEY='BDSPX-GH2u33h4Kn8s4ZuMF4t7ygHxYlXDq2Fh54FJz4VkTyFu8OI4G_9YBBy-FBLJ8SQnsGIhuz_gPIsdRPPc0';
-let messaging2=null;
-try{messaging2=firebase.messaging();}catch(e){}
-
-async function requestNotifPermission(){
-  if(!messaging2)return;
-  try{
-    const perm=await Notification.requestPermission();
-    if(perm!=='granted'){toast('Notification denied','err');return;}
-    const token=await messaging2.getToken({vapidKey:VAPID_KEY});
-    if(token){
-      await db.collection('fcm_tokens').doc(token).set({token,createdAt:Date.now()});
-      toast('Notifications enabled! 🔔','ok');
-    }
-  }catch(e){console.log('Notif error:',e);}
-}
-window.requestNotifPermission=requestNotifPermission;
-
-if(messaging2){
-  messaging2.onMessage(payload=>{
-    const {title,body}=payload.notification||{};
-    if(title){
-      const d=document.createElement('div');
-      d.className='push-notif';
-      d.innerHTML=`<div class="pn-icon">🔔</div><div><div class="pn-title">${title}</div><div class="pn-body">${body||''}</div></div><button onclick="this.parentElement.remove()">✕</button>`;
-      document.body.appendChild(d);setTimeout(()=>d.remove(),6000);
-    }
-  });
-}
-
-// Notification bell
-window.showNotifBell = async function(){
-  try{
-    const snap=await db.collection('notifications').orderBy('createdAt','desc').limit(10).get();
-    const notifs=snap.docs.map(d=>({...d.data(),id:d.id})).filter(n=>!n.read);
-    const bell=el('notif-bell');
-    if(bell)bell.innerHTML=`🔔${notifs.length>0?`<span class="nbadge">${notifs.length}</span>`:''}`;
-    showNotifPanel(notifs);
-  }catch(e){}
-};
-
-function showNotifPanel(notifs){
-  const existing=document.getElementById('notif-panel');if(existing){existing.remove();return;}
-  const panel=document.createElement('div');panel.id='notif-panel';panel.className='notif-panel';
-  panel.innerHTML=`<div class="np-head"><span>🔔 Notifications</span><button onclick="document.getElementById('notif-panel').remove()">✕</button></div>
-    ${notifs.length===0?'<div class="np-empty">No new notifications</div>':notifs.map(n=>`<div class="np-item"><div class="np-title">${n.title}</div><div class="np-body">${n.body}</div><div class="np-time">${new Date(n.createdAt).toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit'})}</div></div>`).join('')}
-    <div style="padding:10px;text-align:center"><button onclick="markAllNotifsRead()" style="background:none;border:none;color:var(--or);font-size:.82rem;cursor:pointer;font-family:Outfit,sans-serif">Mark all as read</button></div>`;
-  document.body.appendChild(panel);
-}
-
-window.markAllNotifsRead = async function(){
-  try{
-    const snap=await db.collection('notifications').get();
-    snap.docs.forEach(async d=>{if(!d.data().read)await db.collection('notifications').doc(d.id).update({read:true});});
-  }catch(e){}
-  document.getElementById('notif-panel')?.remove();
-  toast('All notifications cleared','ok');
-};
-
-setInterval(()=>{if(S.adminIn){const bell=el('notif-bell');if(bell)window.showNotifBell&&showNotifBell();}},30000);
-
-// Logout click override
-document.addEventListener('click',e=>{
-  if(e.target.closest&&e.target.closest('[onclick*="adminIn=false"]')){
-    e.preventDefault();e.stopPropagation();
-    doAdminLogout();
+// ─── SUPABASE AUTH USER SETUP ─────────────────────────────────────────────────
+// Create admin user in Supabase if not exists
+(async () => {
+  const { data } = await sb.auth.getSession();
+  if (!data.session) {
+    // Try silent sign in
+    await sb.auth.signInWithPassword({ email: R.email, password: S.adminPass }).catch(() => {
+      // User might not exist yet — sign up
+      sb.auth.signUp({ email: R.email, password: S.adminPass }).catch(() => {});
+    });
   }
-});
-} // end firebase safety check
+})();
 </script>
-
 </body>
 </html>
