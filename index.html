@@ -1579,18 +1579,34 @@ function pageAdminLogin(){
 }
 function togglePw(){const i=el('al-pw');const e=el('pw-eye');if(!i)return;if(i.type==='password'){i.type='text';if(e)e.textContent='🙈';}else{i.type='password';if(e)e.textContent='👁️';}}
 function doAdminLogin(){
-  // Firebase version handles this — see module script below
   const email=(el('al-id')?.value||'').trim();
   const pw=(el('al-pw')?.value||'').trim();
   const err=el('al-err');
   if(!email||!pw){if(err)err.innerHTML='<div class="errbox">⚠️ Enter email and password.</div>';return;}
-  if(err)err.innerHTML='<div style="color:var(--mu);font-size:.85rem;text-align:center;padding:8px">⏳ Signing in...</div>';
+  // Instant local check
+  if(email===R.email && pw===S.adminPass){
+    S.adminIn=true;S.adminEmail=email;
+    toast('Welcome back, Admin! 👋','ok');
+    S.page='admin';render();
+    // Firebase background login
+    if(typeof firebase!=='undefined' && typeof auth!=='undefined'){
+      auth.signInWithEmailAndPassword(email,pw).catch(()=>{});
+    }
+    return;
+  }
+  if(err)err.innerHTML='<div class="errbox">❌ Invalid email or password.</div>';
 }
 function doForgotPassword(){
   const email=(el('al-id')?.value||'').trim();
   const msg=el('al-forgot-msg');
-  if(!email||!email.includes('@')){if(msg)msg.innerHTML='<div class="errbox">⚠️ Enter your email first.</div>';return;}
-  if(msg)msg.innerHTML='<div style="color:var(--mu);font-size:.85rem;text-align:center;padding:8px">⏳ Sending...</div>';
+  if(!email||!email.includes('@')){if(msg)msg.innerHTML='<div class="errbox">⚠️ Email দাও আগে।</div>';return;}
+  if(typeof firebase!=='undefined' && typeof auth!=='undefined'){
+    auth.sendPasswordResetEmail(email)
+      .then(()=>{if(msg)msg.innerHTML=`<div class="sucbox">📧 Reset link sent to <strong>${email}</strong>. Inbox check করো!</div>`;})
+      .catch(e=>{if(msg)msg.innerHTML=`<div class="errbox">❌ ${e.code==='auth/user-not-found'?'Email টা Firebase এ নেই।':e.message}</div>`;});
+  } else {
+    if(msg)msg.innerHTML='<div class="errbox">❌ Internet নেই।</div>';
+  }
 }
 function doForgotPassword(){
   const email=(el('al-id')?.value||'').trim();
@@ -2214,12 +2230,14 @@ const db = firebase.firestore();
 // ─── AUTH STATE ───────────────────────────────────────────────────────────────
 auth.onAuthStateChanged(async (user) => {
   if (user) {
+    if (S.adminIn) return; // already logged in, skip
     S.adminIn = true;
     S.adminEmail = user.email;
-    toast('Welcome back, Admin! 👋', 'ok');
     try { await loadAllData(); } catch(e) { console.log('loadAllData error:', e); }
-    S.page = 'admin';
-    render();
+    if (S.page === 'admin-login' || S.page === 'home') {
+      S.page = 'admin';
+      render();
+    }
   } else {
     S.adminIn = false;
     S.adminEmail = '';
@@ -2275,61 +2293,12 @@ async function loadAllData() {
   }
 }
 
-// ─── AUTH FUNCTIONS ───────────────────────────────────────────────────────────
-window.doAdminLogin = async function() {
-  const email = (el('al-id')?.value||'').trim();
-  const pw = (el('al-pw')?.value||'').trim();
-  const err = el('al-err');
-  if (!email||!pw) { if(err) err.innerHTML='<div class="errbox">⚠️ Enter email and password.</div>'; return; }
-
-  // Instant local check first
-  if (email === R.email && pw === S.adminPass) {
-    S.adminIn = true;
-    S.adminEmail = email;
-    toast('Welcome back, Admin! 👋', 'ok');
-    S.page = 'admin';
-    render();
-    // Firebase login in background (for session persistence)
-    if (typeof firebase !== 'undefined') {
-      try { await auth.signInWithEmailAndPassword(email, pw); } catch(e) {}
-    }
-    return;
-  }
-
-  // Try Firebase if local check fails
-  if (typeof firebase !== 'undefined') {
-    if(err) err.innerHTML='<div style="color:var(--mu);font-size:.85rem;text-align:center;padding:8px">⏳ Signing in...</div>';
-    try {
-      await auth.signInWithEmailAndPassword(email, pw);
-      // onAuthStateChanged will handle the rest
-    } catch(e) {
-      const msg = ['auth/invalid-credential','auth/wrong-password','auth/user-not-found'].includes(e.code)
-        ? 'Invalid email or password.' : e.message;
-      if(err) err.innerHTML = `<div class="errbox">❌ ${msg}</div>`;
-    }
-  } else {
-    if(err) err.innerHTML='<div class="errbox">❌ Invalid email or password.</div>';
-  }
-};
-
-window.doForgotPassword = async function() {
-  const email = (el('al-id')?.value||'').trim();
-  const msg = el('al-forgot-msg');
-  if (!email||!email.includes('@')) { if(msg) msg.innerHTML='<div class="errbox">⚠️ Enter your email first.</div>'; return; }
-  try {
-    await auth.sendPasswordResetEmail(email);
-    if(msg) msg.innerHTML=`<div class="sucbox">📧 Reset link sent to <strong>${email}</strong>. Check your inbox!</div>`;
-  } catch(e) { if(msg) msg.innerHTML=`<div class="errbox">❌ ${e.message}</div>`; }
-};
-
-window.doAdminLogout = async function() {
-  await auth.signOut();
-  S.adminIn = false;
-  S.page = 'home';
-  render();
-};
-
 // ─── FIRESTORE SAVES ──────────────────────────────────────────────────────────
+window.doAdminLogout = async function() {
+  if(typeof auth!=='undefined') try{await auth.signOut();}catch(e){}
+  S.adminIn=false; S.page='home'; render();
+};
+
 window.saveMenuItem = async function() {
   const name=(el('fi-name')?.value||'').trim();
   const price=Number(el('fi-price')?.value||0);
