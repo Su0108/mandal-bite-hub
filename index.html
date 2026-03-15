@@ -710,9 +710,9 @@ function openCart(){el('cart-drawer').classList.add('open');el('cart-backdrop').
 function closeCart(){el('cart-drawer').classList.remove('open');el('cart-backdrop').classList.remove('open');}
 
 function addToCart(id){
-  const item=S.menu.find(m=>m.id===id);
+  const item=S.menu.find(m=>String(m.id)===String(id));
   if(!item||item.soldOut)return;
-  const ex=S.cart.find(c=>c.id===id);
+  const ex=S.cart.find(c=>String(c.id)===String(id));
   if(ex)ex.qty++;else S.cart.push({...item,qty:1});
   toast(item.name+' added! 🛒');
   renderNavBadge();renderBNav();renderStickyCart();
@@ -721,7 +721,7 @@ function addToCart(id){
 }
 
 function updQty(id,d){
-  const idx=S.cart.findIndex(c=>c.id===id);
+  const idx=S.cart.findIndex(c=>String(c.id)===String(id));
   if(idx<0)return;
   S.cart[idx].qty+=d;
   if(S.cart[idx].qty<=0)S.cart.splice(idx,1);
@@ -824,7 +824,7 @@ document.addEventListener('keydown',e=>{
 
 // ─── MENU CARD BUILDER ────────────────────────────────────────────────────────
 function buildMenuCard(item,showOrderNow=true){
-  const ci=S.cart.find(c=>c.id===item.id);
+  const ci=S.cart.find(c=>String(c.id)===String(item.id));
   const badges=item.badge?`<div class="item-badges"><span class="ibadge ${item.badge}">${item.badge==='bestseller'?'⭐ Bestseller':item.badge==='new'?'🆕 New':item.badge==='spicy'?'🌶️ Spicy':item.badge==='special'?'✨ Special':''}</span></div>`:'';
   const soldOverlay=item.soldOut?'<div class="sold-overlay"><span>❌ Sold Out Today</span></div>':'';
   let actions='';
