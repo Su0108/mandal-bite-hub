@@ -2208,12 +2208,13 @@ const firebaseConfig = {
 };
 
 // Safety check — wait for firebase to load
+let auth, db;
 if (typeof firebase === 'undefined') {
   console.error('Firebase not loaded!');
 } else {
 firebase.initializeApp(firebaseConfig);
-const auth = firebase.auth();
-const db = firebase.firestore();
+auth = firebase.auth();
+db = firebase.firestore();
 
 // ─── AUTH STATE ───────────────────────────────────────────────────────────────
 auth.onAuthStateChanged(async (user) => {
