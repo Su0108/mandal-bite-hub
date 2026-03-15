@@ -2205,11 +2205,37 @@ window.submitOrder = async function() {
   const oid='ORD'+Date.now().toString().slice(-6);
   const now=Date.now();
   const ord={id:oid,items:S.cart,total:discSub,subtotal:sub,discount:disc,coupon:S.couponApplied||'',customer:{name,phone,type:otype,notes},status:'Pending',placed_at:now,at:new Date(now).toLocaleString('en-IN')};
-  try { await sb.from('orders').insert(ord); } catch(e) {}
+  const {error} = await sb.from('orders').insert(ord);
+  if(error){toast('Order failed: '+error.message,'err');return;}
   S.orders.unshift({...ord,placedAt:now});
   S.pendOrd={...ord,placedAt:now}; S.curOid=oid;
   S.cart=[]; S.couponApplied=null; S.couponCode='';
   renderNavBadge(); go('payment');
+};
+
+// Override lookupOrders to fetch from Supabase
+window.lookupOrders = async function() {
+  const phone=(el('track-phone')?.value||'').trim();
+  const results=el('track-results');
+  if(!results)return;
+  if(!/^\d{10}$/.test(phone)){
+    results.innerHTML='<div style="text-align:center;padding:28px;background:var(--wh);border-radius:var(--r2);box-shadow:var(--sh)"><div style="font-size:2.2rem;margin-bottom:10px">⚠️</div><p style="color:var(--mu)">Please enter a valid 10-digit phone number.</p></div>';
+    return;
+  }
+  results.innerHTML='<div style="text-align:center;padding:28px;color:var(--mu)">⏳ Looking up orders...</div>';
+  try {
+    const {data,error} = await sb.from('orders').select('*').order('placed_at',{ascending:false});
+    if(error) throw error;
+    if(data) S.orders = data.map(o=>({...o,placedAt:o.placed_at}));
+    const orders = getOrdersByPhone(phone);
+    if(orders.length===0){
+      results.innerHTML='<div style="text-align:center;padding:36px;background:var(--wh);border-radius:var(--r2);box-shadow:var(--sh)"><div style="font-size:2.8rem;margin-bottom:12px">🔎</div><h3 style="color:var(--br);margin-bottom:8px">No Active Orders Found</h3><p style="color:var(--mu);font-size:.9rem">No orders found for <strong>'+phone+'</strong>.</p><button class="bp" style="margin-top:18px" onclick="go(\'menu\')">Order Food →</button></div>';
+      return;
+    }
+    results.innerHTML = orders.map(o => buildOrderCard(o)).join('');
+  } catch(e) {
+    results.innerHTML='<div style="text-align:center;padding:28px;color:var(--mu)">❌ Error loading orders. Try again.</div>';
+  }
 };
 
 window.submitRes = async function() {
