@@ -1608,18 +1608,6 @@ function doForgotPassword(){
     if(msg)msg.innerHTML='<div class="errbox">❌ Internet নেই।</div>';
   }
 }
-function doForgotPassword(){
-  const email=(el('al-id')?.value||'').trim();
-  const msg=el('al-forgot-msg');
-  if(!email||!email.includes('@')){
-    if(msg)msg.innerHTML='<div class="errbox">⚠️ Please enter your email first.</div>';
-    return;
-  }
-  // When Firebase is connected this will send real reset email
-  // For now show instruction
-  if(msg)msg.innerHTML=`<div class="sucbox" style="font-size:.84rem">📧 Password reset link will be sent to <strong>${email}</strong> once Firebase is connected.</div>`;
-}
-
 function pageAdmin(){
   if(!S.adminIn)return pageAdminLogin();
   const revenue=S.orders.filter(o=>o.status==='Completed').reduce((s,o)=>s+grand(o.total),0);
