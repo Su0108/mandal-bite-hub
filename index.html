@@ -1573,10 +1573,18 @@ function pageAdminLogin(){
 }
 function togglePw(){const i=el('al-pw');const e=el('pw-eye');if(!i)return;if(i.type==='password'){i.type='text';if(e)e.textContent='🙈';}else{i.type='password';if(e)e.textContent='👁️';}}
 function doAdminLogin(){
-  const id=(el('al-id')?.value||'').trim();const pw=(el('al-pw')?.value||'').trim();
+  // Firebase version handles this — see module script below
+  const email=(el('al-id')?.value||'').trim();
+  const pw=(el('al-pw')?.value||'').trim();
   const err=el('al-err');
-  if(id===ADMIN.id&&pw===ADMIN.pass){S.adminIn=true;toast('Welcome back, Admin! 👋','ok');go('admin');}
-  else if(err)err.innerHTML='<div class="errbox">❌ Invalid email or password.</div>';
+  if(!email||!pw){if(err)err.innerHTML='<div class="errbox">⚠️ Enter email and password.</div>';return;}
+  if(err)err.innerHTML='<div style="color:var(--mu);font-size:.85rem;text-align:center;padding:8px">⏳ Signing in...</div>';
+}
+function doForgotPassword(){
+  const email=(el('al-id')?.value||'').trim();
+  const msg=el('al-forgot-msg');
+  if(!email||!email.includes('@')){if(msg)msg.innerHTML='<div class="errbox">⚠️ Enter your email first.</div>';return;}
+  if(msg)msg.innerHTML='<div style="color:var(--mu);font-size:.85rem;text-align:center;padding:8px">⏳ Sending...</div>';
 }
 function doForgotPassword(){
   const email=(el('al-id')?.value||'').trim();
@@ -2205,13 +2213,17 @@ onAuthStateChanged(auth, async (user) => {
   if (user) {
     S.adminIn = true;
     S.adminEmail = user.email;
+    toast('Welcome back, Admin! 👋', 'ok');
     await loadAllData();
-    if (S.page === 'admin-login') go('admin');
-    else render();
+    S.page = 'admin';
+    render();
   } else {
     S.adminIn = false;
     S.adminEmail = '';
-    if (S.page === 'admin') go('admin-login');
+    if (S.page === 'admin') {
+      S.page = 'home';
+      render();
+    }
   }
 });
 
@@ -2273,11 +2285,14 @@ window.doAdminLogin = async function() {
   const pw = (el('al-pw')?.value || '').trim();
   const err = el('al-err');
   if (!email || !pw) { if(err) err.innerHTML='<div class="errbox">⚠️ Enter email and password.</div>'; return; }
+  if(err) err.innerHTML='<div style="color:var(--mu);font-size:.85rem;text-align:center;padding:8px">⏳ Signing in...</div>';
   try {
     await signInWithEmailAndPassword(auth, email, pw);
-    toast('Welcome back, Admin! 👋', 'ok');
+    // onAuthStateChanged will handle navigation automatically
   } catch(e) {
-    const msg = e.code === 'auth/invalid-credential' ? 'Invalid email or password.' : e.message;
+    const msg = e.code === 'auth/invalid-credential' || e.code === 'auth/wrong-password' || e.code === 'auth/user-not-found'
+      ? 'Invalid email or password.'
+      : e.message;
     if(err) err.innerHTML = `<div class="errbox">❌ ${msg}</div>`;
   }
 };
