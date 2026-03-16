@@ -560,12 +560,7 @@ footer{background:var(--br);color:#d9c4b0;padding:40px 6vw 18px;width:100vw;box-
   <button class="lb-next" onclick="lbNav(1)">›</button>
   <div class="lb-caption" id="lb-cap"></div>
 </div>
-<div class="cart-backdrop" id="cart-backdrop" onclick="closeCart()"></div>
-<div class="cart-drawer" id="cart-drawer">
-  <div class="cart-head"><h3>🛒 Your Cart</h3><button class="cart-close" onclick="closeCart()">✕</button></div>
-  <div class="cart-body" id="cart-body"></div>
-  <div class="cart-foot" id="cart-foot"></div>
-</div>
+
 <script>
 // ─── CONFIG ───────────────────────────────────────────────────────────────────
 const R={
@@ -829,16 +824,11 @@ function buildMenuCard(item,showOrderNow=true){
   const soldOverlay=item.soldOut?'<div class="sold-overlay"><span>❌ Sold Out Today</span></div>':'';
   let actions='';
   if(item.soldOut){
-    actions=`<button class="order-now-btn" style="background:#ccc;cursor:not-allowed" disabled>Unavailable</button>`;
+    actions='';
   } else if(!ci){
-    actions=`<div class="item-actions">
-      <button class="order-now-btn" onclick="addToCart(${item.id})">🛒 Order Now</button>
-    </div>`;
+    actions='';
   } else {
-    actions=`<div class="item-actions">
-      <div class="qctl"><button class="qb" onclick="updQty(${item.id},-1)">−</button><span class="qn">${ci.qty}</span><button class="qb" onclick="updQty(${item.id},1)">+</button></div>
-      ${showOrderNow?`<button class="order-now-btn" onclick="addToCart(${item.id})">+ Add More</button>`:''}
-    </div>`;
+    actions='';
   }
   return `<div class="card">
     <div class="fimg">
@@ -957,7 +947,7 @@ function pageHome(){
     <div class="sec seca">
       <div class="shd"><h2>What Would You Like?</h2><div class="divl"/></div>
       <div class="qnav">
-        ${[['🍽️','Menu','menu'],['🛒','Order Food','order'],['📅','Book Table','reservation'],['📞','Contact','contact']].map(([ic,lb,pg])=>
+        ${[['🍽️','Menu','menu'],['📅','Book Table','reservation'],['📞','Contact','contact']].map(([ic,lb,pg])=>
           `<div class="qitem" onclick="go('${pg}')"><div class="qico">${ic}</div><h3>${lb}</h3></div>`).join('')}
       </div>
     </div>
@@ -990,7 +980,7 @@ function pageMenu(){
       </div>
       <div id="menu-grid-container" class="mgrid"></div>
     </div>
-    <div class="sticky-cart" id="sticky-cart-bar"></div>
+    
   </div>`;
 }
 
@@ -2100,25 +2090,23 @@ function footer(){
 // ─── NAV ─────────────────────────────────────────────────────────────────────
 function navHTML(){
   const c=cartCount();
-  const links=[['Home','home'],['Menu','menu'],['Track Order','status'],['Book Table','reservation'],['Our Chefs','chefs'],['Gallery','gallery'],['WiFi','wifi'],['Contact','contact']];
+  const links=[['Home','home'],['Menu','menu'],['Book Table','reservation'],['Our Chefs','chefs'],['Gallery','gallery'],['WiFi','wifi'],['Contact','contact']];
   return `<nav class="nav">
     <button class="logo" onclick="go('home')">Mandal <span>Bite Hub</span></button>
     <div class="nlinks">
       ${links.map(([l,p])=>`<button class="nb ${S.page===p?'on':''}" onclick="go('${p}')">${l}</button>`).join('')}
-      <button class="nb ncart" onclick="openCart()">🛒 Cart <span class="cbadge" style="display:${c>0?'flex':'none'}">${c}</span></button>
       <button class="dm-btn" onclick="toggleDark()" title="Toggle dark mode">${S.darkMode?'☀️':'🌙'}</button>
     </div>
     <button class="burger" onclick="S.mobMenu=!S.mobMenu;renderMob()">☰</button>
   </nav>
   <div class="mmenu ${S.mobMenu?'open':''}" id="mob-menu">
     ${links.map(([l,p])=>`<button class="nb" onclick="go('${p}')">${l}</button>`).join('')}
-    <button class="nb" onclick="S.mobMenu=false;openCart()">🛒 Cart (${c})</button>
   </div>`;
 }
 
 function bnavHTML(){
   const c=cartCount();
-  const items=[['🏠','Home','home'],['🍽️','Menu','menu'],['📋','My Order','status'],['🛒','Cart','_cart']];
+  const items=[['🏠','Home','home'],['🍽️','Menu','menu'],];
   return `<div class="bnav"><div class="bnav-inner">
     ${items.map(([ic,lb,pg])=>pg==='_cart'
       ?`<button class="bnav-btn bnav-cart-pos ${cartCount()>0?'on':''}" onclick="openCart()"><span class="bi">${ic}</span><span class="bl">${lb}</span><span class="bnav-badge" id="bnav-badge-el" style="display:${c>0?'flex':'none'}">${c}</span></button>`
@@ -2139,16 +2127,16 @@ function render(){
   else if(S.page==='menu')    pageContent=pageMenu();
   else if(S.page==='gallery') pageContent=pageGallery();
   else if(S.page==='chefs')   pageContent=pageChefs();
-  else if(S.page==='order')   pageContent=pageOrder();
-  else if(S.page==='payment') pageContent=pagePayment();
-  else if(S.page==='status')  pageContent=pageStatus();
+  
+  
+  
   else if(S.page==='reservation') pageContent=pageReservation();
   else if(S.page==='wifi')    pageContent=pageWifi();
   else if(S.page==='contact') pageContent=pageContact();
   else if(S.page==='admin-login'){window.location.href='admin.html';return;}
   else if(S.page==='admin'){window.location.href='admin.html';return;}
 
-  const noFooterPages = ['admin','admin-login','order','payment'];
+  const noFooterPages = ['admin','admin-login'];
   const showFooter = !isAdmin && !noFooterPages.includes(S.page);
   root.innerHTML=(isAdmin?'':navHTML())+pageContent+(showFooter?footer():'')+(isAdmin?'':bnavHTML());
 
@@ -2192,51 +2180,9 @@ async function loadCustomerData() {
   } catch(e) { console.log('Load error:', e); }
 }
 
-window.submitOrder = async function() {
-  const name=(el('oname')?.value||'').trim();
-  const phone=(el('ophone')?.value||'').trim();
-  const otype=el('otype')?.value||'dine-in';
-  const notes=(el('onotes')?.value||'').trim();
-  if(!name){toast('Please enter your name','err');return;}
-  if(!/^\d{10}$/.test(phone)){toast('Enter valid 10-digit phone','err');return;}
-  let disc=0;
-  if(S.couponApplied){const cp=getCouponMap()[S.couponApplied];const sub=cartSub();disc=cp.type==='percent'?Math.round(sub*cp.disc/100):Math.min(cp.disc,sub);}
-  const sub=cartSub(); const discSub=sub-disc;
-  const oid='ORD'+Date.now().toString().slice(-6);
-  const now=Date.now();
-  const ord={id:oid,items:S.cart,total:discSub,subtotal:sub,discount:disc,coupon:S.couponApplied||'',customer:{name,phone,type:otype,notes},status:'Pending',placed_at:now,at:new Date(now).toLocaleString('en-IN')};
-  const {error} = await sb.from('orders').insert(ord);
-  if(error){toast('Order failed: '+error.message,'err');return;}
-  S.orders.unshift({...ord,placedAt:now});
-  S.pendOrd={...ord,placedAt:now}; S.curOid=oid;
-  S.cart=[]; S.couponApplied=null; S.couponCode='';
-  renderNavBadge(); go('payment');
-};
 
-// Override lookupOrders to fetch from Supabase
-window.lookupOrders = async function() {
-  const phone=(el('track-phone')?.value||'').trim();
-  const results=el('track-results');
-  if(!results)return;
-  if(!/^\d{10}$/.test(phone)){
-    results.innerHTML='<div style="text-align:center;padding:28px;background:var(--wh);border-radius:var(--r2);box-shadow:var(--sh)"><div style="font-size:2.2rem;margin-bottom:10px">⚠️</div><p style="color:var(--mu)">Please enter a valid 10-digit phone number.</p></div>';
-    return;
-  }
-  results.innerHTML='<div style="text-align:center;padding:28px;color:var(--mu)">⏳ Looking up orders...</div>';
-  try {
-    const {data,error} = await sb.from('orders').select('*').order('placed_at',{ascending:false});
-    if(error) throw error;
-    if(data) S.orders = data.map(o=>({...o,placedAt:o.placed_at}));
-    const orders = getOrdersByPhone(phone);
-    if(orders.length===0){
-      results.innerHTML='<div style="text-align:center;padding:36px;background:var(--wh);border-radius:var(--r2);box-shadow:var(--sh)"><div style="font-size:2.8rem;margin-bottom:12px">🔎</div><h3 style="color:var(--br);margin-bottom:8px">No Active Orders Found</h3><p style="color:var(--mu);font-size:.9rem">No orders found for <strong>'+phone+'</strong>.</p><button class="bp" style="margin-top:18px" onclick="go(\'menu\')">Order Food →</button></div>';
-      return;
-    }
-    results.innerHTML = orders.map(o => buildOrderCard(o)).join('');
-  } catch(e) {
-    results.innerHTML='<div style="text-align:center;padding:28px;color:var(--mu)">❌ Error loading orders. Try again.</div>';
-  }
-};
+
+
 
 window.submitRes = async function() {
   const name=(el('rname')?.value||'').trim();
@@ -2255,12 +2201,7 @@ window.submitRes = async function() {
   if(b)b.innerHTML='<div class="sucbox">✅ Reservation Received!</div>';
 };
 
-sb.channel('orders-rt').on('postgres_changes',{event:'UPDATE',schema:'public',table:'orders'},async ()=>{
-  if(S.page==='status'){
-    const r=await sb.from('orders').select('*').order('placed_at',{ascending:false});
-    if(r.data){S.orders=r.data.map(o=>({...o,placedAt:o.placed_at}));render();}
-  }
-}).subscribe();
+
 
 loadCustomerData();
 </script>
